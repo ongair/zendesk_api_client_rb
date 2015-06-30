@@ -15,7 +15,7 @@ module ZendeskAPI
           return unless type == 'application/json'
 
           unless env[:body].strip.empty?
-            env[:body] = JSON.parse(env[:body])
+            env[:body] = JSON.parse(env[:body].encode('utf-8', 'binary', invalid: :replace, undef: :replace, replace: ''))
           end
         end
       end
