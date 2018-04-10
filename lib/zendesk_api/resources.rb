@@ -1,14 +1,14 @@
 module ZendeskAPI
-# @internal The following are redefined later, but needed by some circular resources (e.g. Ticket -> User, User -> Ticket)
-
+  # @internal The following are redefined later, but needed by some circular resources (e.g. Ticket -> User, User -> Ticket)
 
   class Ticket < Resource; end
   class Forum < Resource; end
   class User < Resource; end
   class Category < Resource; end
   class OrganizationMembership < ReadResource; end
+  class OrganizationSubscription < ReadResource; end
 
-# @internal Begin actual Resource definitions
+  # @internal Begin actual Resource definitions
 
   class Locale < ReadResource; end
 
@@ -97,7 +97,9 @@ module ZendeskAPI
     include Create
     include Destroy
 
-    def id; token; end
+    def id
+      token
+    end
 
     has_many Attachment
 
@@ -121,11 +123,12 @@ module ZendeskAPI
     has_many User
     has_many Tag, :extend => Tag::Update, :inline => :create
     has_many OrganizationMembership
+    has_many :subscriptions, class: OrganizationSubscription
 
     # Gets a incremental export of organizations from the start_time until now.
     # @param [Client] client The {Client} object to be used
     # @param [Integer] start_time The start_time parameter
-    # @return [Collection] Collection of {Ticket}
+    # @return [Collection] Collection of {Organization}
     def self.incremental_export(client, start_time)
       ZendeskAPI::Collection.new(client, self, :path => "incremental/organizations?start_time=#{start_time.to_i}")
     end
@@ -151,6 +154,14 @@ module ZendeskAPI
 
     extend CreateMany
     extend DestroyMany
+
+    has User
+    has Organization
+  end
+
+  class OrganizationSubscription < ReadResource
+    include Create
+    include Destroy
 
     has User
     has Organization
@@ -182,8 +193,7 @@ module ZendeskAPI
 
   class Topic < Resource
     class TopicComment < TopicComment
-      extend Read
-
+      include Read
       include Create
       include Update
       include Destroy
@@ -326,8 +336,12 @@ module ZendeskAPI
       has :author, :class => User
 
       def save
-        save_associations
-        true
+        if new_record?
+          save_associations
+          true
+        else
+          false
+        end
       end
 
       alias :save! :save
@@ -352,7 +366,7 @@ module ZendeskAPI
   class TicketField < Resource; end
 
   class TicketMetric < DataResource
-    extend Read
+    include Read
   end
 
   class TicketRelated < DataResource; end
@@ -367,13 +381,17 @@ module ZendeskAPI
     # Gets a incremental export of ticket events from the start_time until now.
     # @param [Client] client The {Client} object to be used
     # @param [Integer] start_time The start_time parameter
-    # @return [Collection] Collection of {Ticket}
+    # @return [Collection] Collection of {TicketEvent}
     def self.incremental_export(client, start_time)
       ZendeskAPI::Collection.new(client, self, :path => "incremental/ticket_events?start_time=#{start_time.to_i}")
     end
   end
 
   class Ticket < Resource
+    extend CreateMany
+    extend UpdateMany
+    extend DestroyMany
+
     class Audit < DataResource
       class Event < Data
         has :author, :class => User
@@ -394,8 +412,12 @@ module ZendeskAPI
       has :author, :class => User
 
       def save
-        save_associations
-        true
+        if new_record?
+          save_associations
+          true
+        else
+          false
+        end
       end
 
       alias :save! :save
@@ -507,7 +529,7 @@ module ZendeskAPI
     private
 
     def attributes_for_save
-      to_save = [:conditions, :actions, :output].inject({}) {|h,k| h.merge(k => send(k))}
+      to_save = [:conditions, :actions, :output].inject({}) { |h, k| h.merge(k => send(k)) }
       { self.class.singular_resource_name.to_sym => attributes.changes.merge(to_save) }
     end
   end
@@ -599,15 +621,15 @@ module ZendeskAPI
       end
 
       response = @client.connection.get(path)
-      Hashie::Mash.new(response.body.fetch("result", {}))
+      SilentMash.new(response.body.fetch("result", {}))
     end
 
     # Returns the update to a ticket that happens when a macro will be applied.
     # @param [Ticket] ticket Optional {Ticket} to apply this macro to
     def apply(ticket = nil)
       apply!(ticket)
-    rescue Faraday::Error::ClientError => e
-      Hashie::Mash.new
+    rescue Faraday::Error::ClientError
+      SilentMash.new
     end
   end
 
@@ -626,8 +648,16 @@ module ZendeskAPI
   end
 
   class User < Resource
+    extend CreateMany
+    extend UpdateMany
+    extend DestroyMany
+
     class TopicComment < TopicComment
-      extend Read
+      include Read
+    end
+
+    class GroupMembership < Resource
+      put :make_default
     end
 
     class Identity < Resource
@@ -666,7 +696,7 @@ module ZendeskAPI
     # Gets a incremental export of users from the start_time until now.
     # @param [Client] client The {Client} object to be used
     # @param [Integer] start_time The start_time parameter
-    # @return [Collection] Collection of {Ticket}
+    # @return [Collection] Collection of {User}
     def self.incremental_export(client, start_time)
       ZendeskAPI::Collection.new(client, self, :path => "incremental/users?start_time=#{start_time.to_i}")
     end
@@ -718,6 +748,7 @@ module ZendeskAPI
     has_many GroupMembership
     has_many Topic
     has_many OrganizationMembership
+    has_many OrganizationSubscription
 
     has_many ForumSubscription
     has_many TopicSubscription
@@ -725,6 +756,7 @@ module ZendeskAPI
     has_many :topic_votes, :class => Topic::TopicVote
 
     has_many Setting
+    has_many Tag, :extend => Tag::Update, :inline => :create
 
     def attributes_for_save
       # Don't send role_id, it's necessary
@@ -785,6 +817,28 @@ module ZendeskAPI
     class GreetingCategory < Resource
       namespace "channels/voice"
     end
+
+    class Ticket < CreateResource
+      namespace "channels/voice"
+    end
+
+    class Agent < ReadResource
+      namespace "channels/voice"
+
+      class Ticket < CreateResource
+        def new_record?
+          true
+        end
+
+        def self.display!(client, options)
+          new(client, options).tap do |resource|
+            resource.save!(path: resource.path + '/display')
+          end
+        end
+      end
+
+      has_many Ticket
+    end
   end
 
   class TicketForm < Resource
@@ -822,7 +876,7 @@ module ZendeskAPI
     end
 
     def handle_response(response)
-      @attributes.replace(response.body) if response.body
+      @attributes.replace(response.body) if response.body.is_a?(Hash)
     end
   end
 
@@ -914,7 +968,7 @@ module ZendeskAPI
   class PushNotificationDevice < DataResource
     def self.destroy_many(client, tokens)
       ZendeskAPI::Collection.new(
-        client, self,"push_notification_devices" => tokens,
+        client, self, "push_notification_devices" => tokens,
         :path => "push_notification_devices/destroy_many",
         :verb => :post
       )

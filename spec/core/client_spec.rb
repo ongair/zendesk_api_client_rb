@@ -155,7 +155,7 @@ describe ZendeskAPI::Client do
       end
 
       context "with a logger" do
-        let(:out){ StringIO.new }
+        let(:out) { StringIO.new }
         subject { Logger.new(out) }
 
         it "should log" do
@@ -240,6 +240,7 @@ describe ZendeskAPI::Client do
 
     it "should not respond_to? invalid resources" do
       expect(subject.respond_to?(:nope)).to eq(false)
+      expect(subject.respond_to?(:empty?)).to eq(false)
     end
 
     it "delegates voice correctly" do

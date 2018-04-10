@@ -29,7 +29,7 @@ module ZendeskAPI
     # @param [Hash] options Any additional options to be passed in.
     def initialize(client, resource, options = {})
       @client, @resource_class, @resource = client, resource, resource.resource_name
-      @options = Hashie::Mash.new(options)
+      @options = SilentMash.new(options)
 
       set_association_from_options
       join_special_params
@@ -47,8 +47,8 @@ module ZendeskAPI
     end
 
     # Methods that take a Hash argument
-    methods = %w{create find update destroy}
-    methods += methods.map {|method| method + "!"}
+    methods = %w{create find update update_many destroy}
+    methods += methods.map { |method| method + "!" }
     methods.each do |deferrable|
       # Passes arguments and the proper path to the resource class method.
       # @param [Hash] options Options or attributes to pass
@@ -57,10 +57,10 @@ module ZendeskAPI
           raise NoMethodError.new("undefined method \"#{deferrable}\" for #{@resource_class}", deferrable, args)
         end
 
-        opts = args.last.is_a?(Hash) ? args.pop : {}
-        opts.merge!(:association => @association)
+        args << {} unless args.last.is_a?(Hash)
+        args.last.merge!(:association => @association)
 
-        @resource_class.send(deferrable, @client, opts)
+        @resource_class.send(deferrable, @client, *args)
       end
     end
 
@@ -82,7 +82,7 @@ module ZendeskAPI
 
     # Convenience method to build a new resource and
     # add it to the collection. Fetches the collection as well.
-    # @param [Hash] options Options or attributes to pass
+    # @param [Hash] opts Options or attributes to pass
     def build(opts = {})
       wrap_resource(opts, true).tap do |res|
         self << res
@@ -91,7 +91,7 @@ module ZendeskAPI
 
     # Convenience method to build a new resource and
     # add it to the collection. Fetches the collection as well.
-    # @param [Hash] options Options or attributes to pass
+    # @param [Hash] opts Options or attributes to pass
     def build!(opts = {})
       wrap_resource(opts, true).tap do |res|
         fetch!
@@ -152,7 +152,7 @@ module ZendeskAPI
     # Adds an item (or items) to the list of side-loaded resources to request
     # @option sideloads [Symbol or String] The item(s) to sideload
     def include(*sideloads)
-      self.tap { @includes.concat(sideloads.map(&:to_s)) }
+      tap { @includes.concat(sideloads.map(&:to_s)) }
     end
 
     # Adds an item to this collection
@@ -186,7 +186,7 @@ module ZendeskAPI
         return (@resources = [])
       end
 
-      @response = get_response(@query || self.path)
+      @response = get_response(@query || path)
       handle_response(@response.body)
 
       @resources
@@ -236,7 +236,7 @@ module ZendeskAPI
     # @option collection [Array] The collection to replace this one with
     # @raise [ArgumentError] if any resources passed in don't belong in this collection
     def replace(collection)
-      raise "this collection is for #{@resource_class}" if collection.any?{|r| !r.is_a?(@resource_class) }
+      raise "this collection is for #{@resource_class}" if collection.any? { |r| !r.is_a?(@resource_class) }
       @resources = collection
     end
 
@@ -282,17 +282,19 @@ module ZendeskAPI
     end
 
     # @private
-    def to_ary; nil; end
+    def to_ary
+      nil
+    end
 
-    def respond_to?(name)
-      super || Array.new.respond_to?(name)
+    def respond_to_missing?(name, include_all)
+      [].respond_to?(name, include_all)
     end
 
     # Sends methods to underlying array of resources.
     def method_missing(name, *args, &block)
       if resource_methods.include?(name)
         collection_method(name, *args, &block)
-      elsif Array.new.respond_to?(name)
+      elsif [].respond_to?(name, false)
         array_method(name, *args, &block)
       else
         next_collection(name, *args, &block)
@@ -307,7 +309,7 @@ module ZendeskAPI
         inspect = []
         inspect << "options=#{@options.inspect}" if @options.any?
         inspect << "path=#{path}"
-        "#{Inflection.singular(@resource)} collection [#{inspect.join(",")}]"
+        "#{Inflection.singular(@resource)} collection [#{inspect.join(',')}]"
       end
     end
 
@@ -396,7 +398,7 @@ module ZendeskAPI
     def get_response(path)
       @error = nil
       @response = @client.connection.send(@verb || "get", path) do |req|
-        opts = @options.delete_if {|_, v| v.nil?}
+        opts = @options.delete_if { |_, v| v.nil? }
 
         req.params.merge!(:include => @includes.join(",")) if @includes.any?
 
@@ -452,7 +454,7 @@ module ZendeskAPI
     ## Method missing
 
     def array_method(name, *args, &block)
-      to_a.send(name, *args, &block)
+      to_a.public_send(name, *args, &block)
     end
 
     def next_collection(name, *args, &block)
