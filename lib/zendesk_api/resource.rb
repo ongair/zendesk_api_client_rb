@@ -59,7 +59,7 @@ module ZendeskAPI
       @client = client
       @attributes = ZendeskAPI::Trackie.new(attributes)
 
-      if self.class.associations.none? {|a| a[:name] == self.class.singular_resource_name}
+      if self.class.associations.none? { |a| a[:name] == self.class.singular_resource_name }
         ZendeskAPI::Client.check_deprecated_namespace_usage @attributes, self.class.singular_resource_name
       end
 
@@ -117,7 +117,7 @@ module ZendeskAPI
 
     # Compares resources by class and id. If id is nil, then by object_id
     def ==(other)
-      return true if other.object_id == self.object_id
+      return true if other.object_id == object_id
 
       if other && !(other.is_a?(Data) || other.is_a?(Integer))
         warn "Trying to compare #{other.class} to a Resource from #{caller.first}"
@@ -195,6 +195,7 @@ module ZendeskAPI
         @descendants ||= []
         @descendants << base
       end
+
       def descendants
         @descendants || []
       end

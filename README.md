@@ -6,7 +6,7 @@ This client **only** supports Zendesk's v2 API.  Please see our [API documentati
 
 ## Documentation
 
-Please check out the [wiki](https://github.com/zendesk/zendesk_api_client_rb/wiki), [class documentation](https://zendesk-api.herokuapp.com/doc/index.html), and [issues](https://github.com/zendesk/zendesk_api_client_rb/issues) before reporting a bug or asking for help.
+Please check out the [wiki](https://github.com/zendesk/zendesk_api_client_rb/wiki), [class documentation](http://zendesk.github.io/zendesk_api_client_rb), and [issues](https://github.com/zendesk/zendesk_api_client_rb/issues) before reporting a bug or asking for help.
 
 ## Important Notices
 
@@ -20,6 +20,7 @@ Please check out the [wiki](https://github.com/zendesk/zendesk_api_client_rb/wik
 * Version 1.5.0 removed support for Ruby 1.8
 * Version 1.6.0 ZendeskAPI::Voice::CertificationAddress is now ZendeskAPI::Voice::Address
 * Version 1.8.0 no longer considers 1XX and 3XX (except 304) response status codes valid and will raise a NetworkError
+* Version 1.x.x requires you to install `scrub_rb` or `string-scrub` or similar implementation of `String#scrub!` if you're using Ruby 1.9 or 2.0.
 
 ## Installation
 
@@ -38,6 +39,10 @@ Add it to your Gemfile
     gem "zendesk_api"
 
 and follow normal [Bundler](http://gembundler.com/) installation and execution procedures.
+
+If you're using Ruby 1.9 or 2.0, you'll need an implementation of `String#scrub!`. You can use either `scrub_rb` or `string-scrub` or a similar gem to accomplish that:
+
+    gem "scrub_rb"
 
 ## Configuration
 
@@ -92,25 +97,28 @@ The result of configuration is an instance of ZendeskAPI::Client which can then 
 
 One way to use the client is to pass it in as an argument to individual classes.
 
+_note_: all method calls ending in `!` will raise an exception when an error occurs, see the [wiki page](https://github.com/zendesk/zendesk_api_client_rb/wiki/Errors) for more info.
+
 ```ruby
-ZendeskAPI::Ticket.new(client, :id => 1, :priority => "urgent") # doesn't actually send a request, must explicitly call #save
-ZendeskAPI::Ticket.create(client, :subject => "Test Ticket", :comment => { :value => "This is a test" }, :submitter_id => client.current_user.id, :priority => "urgent")
-ZendeskAPI::Ticket.find(client, :id => 1)
-ZendeskAPI::Ticket.destroy(client, :id => 1)
+ZendeskAPI::Ticket.new(client, :id => 1, :priority => "urgent") # doesn't actually send a request, must explicitly call #save!
+
+ZendeskAPI::Ticket.create!(client, :subject => "Test Ticket", :comment => { :value => "This is a test" }, :submitter_id => client.current_user.id, :priority => "urgent")
+ZendeskAPI::Ticket.find!(client, :id => 1)
+ZendeskAPI::Ticket.destroy!(client, :id => 1)
 ```
 
 Another way is to use the instance methods under client.
 
 ```ruby
 client.tickets.first
-client.tickets.find(:id => 1)
+client.tickets.find!(:id => 1)
 client.tickets.build(:subject => "Test Ticket")
-client.tickets.create(:subject => "Test Ticket", :comment => { :value => "This is a test" }, :submitter_id => client.current_user.id, :priority => "urgent")
-client.tickets.destroy(:id => 1)
+client.tickets.create!(:subject => "Test Ticket", :comment => { :value => "This is a test" }, :submitter_id => client.current_user.id, :priority => "urgent")
+client.tickets.destroy!(:id => 1)
 ```
 
 The methods under ZendeskAPI::Client (such as .tickets) return an instance of ZendeskAPI::Collection a lazy-loaded list of that resource.
-Actual requests may not be sent until an explicit ZendeskAPI::Collection#fetch, ZendeskAPI::Collection#to_a, or an applicable methods such
+Actual requests may not be sent until an explicit ZendeskAPI::Collection#fetch!, ZendeskAPI::Collection#to_a!, or an applicable methods such
 as #each.
 
 ### Caveats
@@ -140,15 +148,15 @@ ZendeskAPI::Collections can be paginated:
 ```ruby
 tickets = client.tickets.page(2).per_page(3)
 next_page = tickets.next # => 3
-tickets.fetch # GET /api/v2/tickets?page=3&per_page=3
+tickets.fetch! # GET /api/v2/tickets?page=3&per_page=3
 previous_page = tickets.prev # => 2
-tickets.fetch # GET /api/v2/tickets?page=2&per_page=3
+tickets.fetch! # GET /api/v2/tickets?page=2&per_page=3
 ```
 
 Iteration over all resources and pages is handled by Collection#all
 
 ```ruby
-client.tickets.all do |resource|
+client.tickets.all! do |resource|
   # every resource, from all pages, will be yielded to this block
 end
 ```
@@ -156,7 +164,7 @@ end
 If given a block with two arguments, the page number is also passed in.
 
 ```ruby
-client.tickets.all do |resource, page_number|
+client.tickets.all! do |resource, page_number|
   # all resources will be yielded along with the page number
 end
 ```
@@ -179,12 +187,12 @@ Individual resources can be created, modified, saved, and destroyed.
 ticket = client.tickets[0] # ZendeskAPI::Ticket.find(client, :id => 1)
 ticket.priority = "urgent"
 ticket.attributes # => { "priority" => "urgent" }
-ticket.save # Will PUT => true
-ticket.destroy # => true
+ticket.save! # Will PUT => true
+ticket.destroy! # => true
 
 ZendeskAPI::Ticket.new(client, { :priority => "urgent" })
 ticket.new_record? # => true
-ticket.save # Will POST
+ticket.save! # Will POST
 ```
 
 ### Side-loading
@@ -218,7 +226,7 @@ tickets.first.requester # => #<ZendeskAPI::User id=...>
 OR
 
 ```ruby
-ticket = client.tickets.find(:id => 1, :include => :users)
+ticket = client.tickets.find!(:id => 1, :include => :users)
 ticket.requester # => #<ZendeskAPI::User id=...>
 ```
 
@@ -249,7 +257,7 @@ client.topics.show_many(:verb => :post, :ids => [1, 2, 3])
 Use either of the following to obtain the current user instance:
 
 ```ruby
-client.users.find(:id => 'me')
+client.users.find!(:id => 'me')
 client.current_user
 ```
 
@@ -272,7 +280,7 @@ be automatically uploaded and attached.
 ticket = ZendeskAPI::Ticket.new(client, :comment => { :value => "attachments" })
 ticket.comment.uploads << "img.jpg"
 ticket.comment.uploads << File.new("img.jpg")
-ticket.save
+ticket.save!
 ```
 
 ### Apps API
@@ -306,6 +314,7 @@ client.apps.create!(:name => "test", :upload => "app.zip")
 ```
 
 *Note: job statuses are currently not supported, so you must manually poll the job status API for app creation.*
+
 ```ruby
 body = {}
 until %w{failed completed}.include?(body["status"])
@@ -394,7 +403,6 @@ installation.destroy!
 ZendeskAPI::AppInstallation.destroy!(client, :id => 123)
 ```
 
-
 ## Note on Patches/Pull Requests
 1. Fork the project.
 2. Make your feature addition or bug fix.
@@ -414,7 +422,7 @@ Tested with Ruby 1.9, 2.0, 2.1, 2.2 and jRuby.
 
 ## Copyright and license
 
-Copyright 2014 Zendesk
+Copyright 2015 Zendesk
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
 You may obtain a copy of the License at

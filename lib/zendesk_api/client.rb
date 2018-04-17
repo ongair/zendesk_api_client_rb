@@ -5,6 +5,7 @@ require 'zendesk_api/sideloading'
 require 'zendesk_api/configuration'
 require 'zendesk_api/collection'
 require 'zendesk_api/lru_cache'
+require 'zendesk_api/silent_mash'
 require 'zendesk_api/middleware/request/etag_cache'
 require 'zendesk_api/middleware/request/retry'
 require 'zendesk_api/middleware/request/upload'
@@ -13,6 +14,7 @@ require 'zendesk_api/middleware/request/url_based_access_token'
 require 'zendesk_api/middleware/response/callback'
 require 'zendesk_api/middleware/response/deflate'
 require 'zendesk_api/middleware/response/gzip'
+require 'zendesk_api/middleware/response/sanitize_response'
 require 'zendesk_api/middleware/response/parse_iso_dates'
 require 'zendesk_api/middleware/response/parse_json'
 require 'zendesk_api/middleware/response/raise_error'
@@ -23,6 +25,8 @@ module ZendeskAPI
   # The top-level class that handles configuration and connection to the Zendesk API.
   # Can also be used as an accessor to resource collections.
   class Client
+    GZIP_EXCEPTIONS = [:em_http, :httpclient]
+
     # @return [Configuration] Config instance
     attr_reader :config
     # @return [Array] Custom response callbacks
@@ -60,7 +64,7 @@ module ZendeskAPI
     # @return [Hash] The attributes of the current account or nil
     def current_account(reload = false)
       return @current_account if @current_account && !reload
-      @current_account = Hashie::Mash.new(connection.get('account/resolve').body)
+      @current_account = SilentMash.new(connection.get('account/resolve').body)
     end
 
     # Returns the current locale
@@ -142,10 +146,11 @@ module ZendeskAPI
         builder.use ZendeskAPI::Middleware::Response::Logger, config.logger if config.logger
         builder.use ZendeskAPI::Middleware::Response::ParseIsoDates
         builder.use ZendeskAPI::Middleware::Response::ParseJson
+        builder.use ZendeskAPI::Middleware::Response::SanitizeResponse
 
         adapter = config.adapter || Faraday.default_adapter
 
-        unless [:em_http, Faraday::Adapter::EMHttp].include?(adapter)
+        unless GZIP_EXCEPTIONS.include?(adapter)
           builder.use ZendeskAPI::Middleware::Response::Gzip
           builder.use ZendeskAPI::Middleware::Response::Deflate
         end
@@ -168,14 +173,14 @@ module ZendeskAPI
         builder.use ZendeskAPI::Middleware::Request::EncodeJson
         builder.use ZendeskAPI::Middleware::Request::Retry, :logger => config.logger if config.retry # Should always be first in the stack
 
-        builder.adapter *adapter
+        builder.adapter(*adapter)
       end
     end
 
     private
 
     def method_as_class(method)
-      klass_as_string = ZendeskAPI::Helpers.modulize_string(Inflection.singular(method.to_s))
+      klass_as_string = ZendeskAPI::Helpers.modulize_string(Inflection.singular(method.to_s.gsub(/\W/, '')))
       ZendeskAPI::Association.class_from_namespace(klass_as_string)
     end
 

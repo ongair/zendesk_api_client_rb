@@ -20,7 +20,7 @@ module ZendeskAPI
       case resource
       when Hash
         klass.new(@client, resource.merge(:association => instance_association))
-      when String, Fixnum
+      when String, Integer
         klass.new(@client, (options[:include_key] || :id) => resource, :association => instance_association)
       else
         resource.association = instance_association
@@ -172,7 +172,7 @@ module ZendeskAPI
                 klass.find(@client, :id => id, :association => instance_association)
               end.compact
             elsif (resources = method_missing(association[:name].to_sym)) && resources.any?
-              resources.map {|res| wrap_resource(res, association)}
+              resources.map { |res| wrap_resource(res, association) }
             else
               []
             end

@@ -14,7 +14,7 @@ describe ZendeskAPI::Configuration do
   end
 
   it "should set user agent header properly" do
-    expect(subject.options[:headers][:user_agent]).to match(/ZendeskAPI API/)
+    expect(subject.options[:headers][:user_agent]).to match(/ZendeskAPI Ruby/)
   end
 
   it "should set a default open_timeout" do
@@ -22,7 +22,7 @@ describe ZendeskAPI::Configuration do
   end
 
   it "should merge options with client_options" do
-    subject.client_options = {:ssl => false}
+    subject.client_options = { :ssl => false }
     expect(subject.options[:ssl]).to eq(false)
   end
 end
