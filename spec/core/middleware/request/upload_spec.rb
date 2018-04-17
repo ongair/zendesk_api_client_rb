@@ -3,7 +3,7 @@ require 'tempfile'
 require 'action_dispatch'
 
 describe ZendeskAPI::Middleware::Request::Upload do
-  subject { ZendeskAPI::Middleware::Request::Upload.new(lambda {|env| env}) }
+  subject { ZendeskAPI::Middleware::Request::Upload.new(lambda { |env| env }) }
   let(:filename) { File.join(File.dirname(__FILE__), "test.jpg") }
 
   it "should handle no body" do
@@ -15,6 +15,7 @@ describe ZendeskAPI::Middleware::Request::Upload do
   end
 
   it "should handle invalid types" do
+    expect(subject).to receive(:warn)
     expect(subject.call(:body => { :file => :invalid })[:body]).to eq({})
   end
 

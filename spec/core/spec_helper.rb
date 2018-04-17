@@ -13,7 +13,7 @@ require 'zendesk_api'
 require 'vcr'
 require 'logger'
 require 'stringio'
-require 'multi_json'
+require 'scrub_rb' if RUBY_VERSION < "2.1.0"
 
 begin
   require 'byebug'
@@ -21,7 +21,9 @@ rescue LoadError
 end
 
 class String
-  def encoding_aware?; false; end
+  def encoding_aware?
+    false
+  end
 end
 
 require File.join(File.dirname(__FILE__), '..', 'macros', 'resource_macros')
@@ -78,6 +80,8 @@ def client
         config.url = "https://my.zendesk.com/api/v2"
       end
 
+      config.logger = Logger.new("/dev/null")
+
       config.retry = true
     end
 
@@ -107,14 +111,14 @@ module TestHelper
   end
 
   def silence_stderr
-    $stderr = File.new( '/dev/null', 'w' )
+    $stderr = File.new('/dev/null', 'w')
     yield
   ensure
     $stderr = STDERR
   end
 
   def json(body = {})
-    MultiJson.dump(body)
+    JSON.dump(body)
   end
 
   def stub_json_request(verb, path_matcher, body = json, options = {})
@@ -135,7 +139,7 @@ RSpec.configure do |c|
   end
 
   c.around(:each, :silence_logger) do |example|
-    silence_logger{ example.call }
+    silence_logger { example.call }
   end
 
   c.around(:each, :prevent_logger_changes) do |example|

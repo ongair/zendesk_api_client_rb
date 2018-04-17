@@ -10,11 +10,11 @@ class ResourceHandler < YARD::Handlers::Ruby::Base
 
     if klass
       begin
-        klass = klass.split("::").inject(ZendeskAPI) do |p,k|
+        klass = klass.split("::").inject(ZendeskAPI) do |p, k|
           p.const_get(k)
         end
       rescue NameError
-        parent = ZendeskAPI.const_get(namespace.to_s.split('::').last)
+        parent = walk_namespace(namespace)
         klass = parent.const_get(klass)
       end
 
@@ -25,7 +25,7 @@ class ResourceHandler < YARD::Handlers::Ruby::Base
       begin
         klass = ZendeskAPI.const_get(klass)
       rescue NameError
-        parent = ZendeskAPI.const_get(namespace.to_s.split('::').last)
+        parent = walk_namespace(namespace)
         klass = parent.const_get(klass)
       end
 
@@ -52,10 +52,16 @@ class ResourceHandler < YARD::Handlers::Ruby::Base
     writer.docstring.add_tag(YARD::Tags::Tag.new(:param, "The associated object or its attributes", "Hash or #{klass.name}", "value"))
   end
 
+  def walk_namespace(namespace)
+    namespace.to_s.split('::').inject(ZendeskAPI) do |klass, namespace|
+      klass.const_get(namespace)
+    end
+  end
+
   def get_klass(statement)
     statement.traverse do |node|
       if node.type == :assoc && node.jump(:kw).source == "class"
-        classes = node.traverse do |value|
+        node.traverse do |value|
           if value.type == :const_path_ref || value.type == :var_ref
             return value.source
           end

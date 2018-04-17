@@ -10,6 +10,7 @@ end
 class ZendeskAPI::BulkTestResource < ZendeskAPI::DataResource
   extend ZendeskAPI::CreateMany
   extend ZendeskAPI::DestroyMany
+  extend ZendeskAPI::UpdateMany
 end
 
 class ZendeskAPI::NilResource < ZendeskAPI::Data; end
@@ -18,4 +19,3 @@ class ZendeskAPI::SingularTestResource < ZendeskAPI::SingularResource; end
 
 # `client.greetings` should ignore this class, as it's not in the right namespace
 class Greeting; end
-
